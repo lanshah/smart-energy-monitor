@@ -1,0 +1,33 @@
+# Arduino IDE build artifacts
+build/
+*.hex
+*.elf
+*.map
+*.bin
+
+# Arduino IDE preferences
+preferences.txt
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Credentials - NEVER commit real values
+config_local.h
+secrets.h
+
+# Log files
+*.log
