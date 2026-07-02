@@ -1,42 +1,46 @@
 /*
- * display.h — 16×2 I2C LCD Update Routines
- * Smart Energy Monitoring System | ACE6263
+ * display.h - 128x64 I2C OLED Update Routine
+ * Smart Energy Monitoring and Appliance Control System | ACE6263
  *
- * Alternates between two screens every call:
- *   Screen A: Voltage / Current / Power / Energy
- *   Screen B: Temperature / Humidity / Power / Energy
+ * Uses Adafruit_SSD1306 + Adafruit_GFX libraries.
+ * Shows: active appliance, voltage, current, power, temperature,
+ * humidity, and Blynk connection status on a single screen.
  */
 
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
 #include <Arduino.h>
-#include <LiquidCrystal_I2C.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
-static bool _lcdScreen = false;  // false = Screen A, true = Screen B
+void updateOLED(Adafruit_SSD1306 &oled,
+                 const char* activeAppliance,
+                 float voltage, float current, float power,
+                 float tempC, float humidity,
+                 bool blynkConnected) {
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
 
-void updateLCD(LiquidCrystal_I2C &lcd,
-               float vRMS, float iRMS, float powerW, float energyKWh,
-               float tempC, float humidity) {
-  lcd.clear();
-  if (!_lcdScreen) {
-    // ── Screen A ──────────────────────────────────────────────
-    // Row 0:  "230.1V  0.440A"
-    // Row 1:  "100.5W  0.031kWh"
-    lcd.setCursor(0, 0);
-    lcd.printf("%.1fV  %.3fA", vRMS, iRMS);
-    lcd.setCursor(0, 1);
-    lcd.printf("%.1fW  %.4fkWh", powerW, energyKWh);
-  } else {
-    // ── Screen B ──────────────────────────────────────────────
-    // Row 0:  "T:28.3C  H:65.2%"
-    // Row 1:  "P:100.5W [ON]"
-    lcd.setCursor(0, 0);
-    lcd.printf("T:%.1fC H:%.1f%%", tempC, humidity);
-    lcd.setCursor(0, 1);
-    lcd.printf("P:%.1fW %.4fkWh", powerW, energyKWh);
-  }
-  _lcdScreen = !_lcdScreen;
+  oled.setCursor(0, 0);
+  oled.print("Load: ");
+  oled.println(activeAppliance);
+
+  oled.setCursor(0, 12);
+  oled.printf("V:%.2fV  I:%.3fA", voltage, current);
+
+  oled.setCursor(0, 24);
+  oled.printf("P:%.2fW", power);
+
+  oled.setCursor(0, 36);
+  oled.printf("T:%.1fC  H:%.1f%%", tempC, humidity);
+
+  oled.setCursor(0, 48);
+  oled.print("Blynk: ");
+  oled.println(blynkConnected ? "CONNECTED" : "OFFLINE");
+
+  oled.display();
 }
 
 #endif // DISPLAY_H

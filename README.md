@@ -1,232 +1,295 @@
-# Smart Energy Monitoring System
-### ACE6263 — Embedded IoT Systems | Trimester March/April 2026
-**SDG 7 — Affordable and Clean Energy**
+# Smart Energy Monitoring and Appliance Control System Using ESP32 and Blynk
+### ACE6263 - Embedded IoT Systems | Trimester March/April 2026
 
 ---
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
-2. [Hardware Components](#hardware-components)
-3. [System Architecture](#system-architecture)
-4. [Circuit Wiring](#circuit-wiring)
-5. [Software Setup](#software-setup)
-6. [Blynk Dashboard Configuration](#blynk-dashboard-configuration)
-7. [Calibration Guide — ZMPT101B B25](#calibration-guide--zmpt101b-b25)
-8. [File Structure](#file-structure)
-9. [Commit History Convention](#commit-history-convention)
-10. [Team Members](#team-members)
-11. [License](#license)
+2. [Objectives](#objectives)
+3. [Hardware Components](#hardware-components)
+4. [ESP32 Pin Assignment](#esp32-pin-assignment)
+5. [Circuit Wiring](#circuit-wiring)
+6. [Power Distribution](#power-distribution)
+7. [Software Setup](#software-setup)
+8. [Blynk Dashboard Configuration](#blynk-dashboard-configuration)
+9. [Exclusive Appliance-Control Mode](#exclusive-appliance-control-mode)
+10. [Data Processing / Calibration](#data-processing--calibration)
+11. [File Structure](#file-structure)
+12. [Limitations](#limitations)
+13. [Team Members](#team-members)
 
 ---
 
 ## Project Overview
 
-This project implements a **real-time smart energy monitoring system** using an **ESP32 microcontroller** and the **Blynk IoT platform**. The system measures mains voltage, load current, power consumption, and ambient temperature/humidity, and displays this data both locally (LCD) and remotely (Blynk cloud dashboard).
+This project is an Internet of Things system built around an **ESP32** that
+monitors electrical and environmental conditions while allowing a user to
+remotely control four low-voltage appliances using the **Blynk** mobile
+application.
 
-A four-channel relay module enables remote appliance switching. Automated push-notification alerts are triggered when power exceeds a configurable threshold (default: 2 000 W).
+**⚠️ Safety note:** This system is designed only for **low-voltage DC
+testing** and must **never** be connected directly to household AC mains
+electricity.
 
-The project contributes to **UN SDG 7 — Affordable and Clean Energy** by empowering households and small businesses to monitor and reduce energy waste.
+The system measures DC voltage, DC current, electrical power, temperature,
+and humidity, and controls:
+
+- A 3.7–6 V DC air pump
+- An LED
+- One selected segment of a dual-digit seven-segment display
+- A 5 V USB fan (via USB breakout board)
+
+Only **one appliance can be active at a time** (exclusive mode), because a
+single ACS712 current sensor is used to measure whichever appliance is
+currently powered.
+
+---
+
+## Objectives
+
+1. Measure the supply voltage of the connected load.
+2. Measure the current consumed by the active appliance.
+3. Calculate power using `Power = Voltage × Current`.
+4. Measure surrounding temperature and humidity.
+5. Display readings locally on an OLED display.
+6. Send readings to the Blynk IoT platform via Wi-Fi.
+7. Allow users to remotely switch appliances on/off via the Blynk app.
+8. Show the currently active appliance.
+9. Allow only one appliance to operate at a time.
 
 ---
 
 ## Hardware Components
 
-| # | Component | Qty | Unit Price (MYR) | Total (MYR) | Role |
-|---|-----------|-----|-----------------|-------------|------|
-| 1 | ESP32 Dev Board | 1 | 25.00 | 25.00 | Main MCU, Wi-Fi/BT |
-| 2 | **ZMPT101B B25** Voltage Sensor | 1 | 12.00 | 12.00 | AC mains voltage measurement |
-| 3 | ACS712 30A Current Sensor | 1 | 8.50 | 8.50 | AC/DC load current measurement |
-| 4 | DHT22 Sensor | 1 | 9.00 | 9.00 | Ambient temperature & humidity |
-| 5 | ADS1115 16-bit ADC | 1 | 11.00 | 11.00 | High-resolution ADC for sensor signals |
-| 6 | 4-Channel Relay Module | 1 | 7.50 | 7.50 | Remote appliance switching |
-| 7 | 16×2 I2C LCD Module | 1 | 10.00 | 10.00 | Local real-time parameter display |
-| 8 | RGB LED Strip (1 m) | 1 | 15.00 | 15.00 | Visual status/alert indicator |
-| 9 | Breadboard + Jumper Set | 1 | 12.00 | 12.00 | Prototyping connections |
-| 10 | 5 V / 2 A USB Power Adapter | 1 | 8.00 | 8.00 | System power supply |
-| 11 | USB-A to Micro-USB Cable | 1 | 5.00 | 5.00 | Programming & power |
-| 12 | Miscellaneous (resistors, caps, wires) | lot | 10.00 | 10.00 | Circuit completion & protection |
-| | | | **TOTAL** | **133.00** | |
+| Component | Function |
+|-----------|----------|
+| ESP32 Dev Board | Main controller - reads sensors, calculates power, controls relays, updates OLED, connects to Wi-Fi/Blynk |
+| B25 0–25V DC Voltage Sensor | Measures DC voltage supplied to appliances (voltage-divider based) |
+| ACS712 30A Current Sensor | Measures current consumed by the active appliance |
+| DHT22 Sensor | Measures ambient temperature and humidity |
+| 128×64 I2C OLED Display | Local display of all readings and active appliance |
+| 4-Channel Relay Module | Switches the four appliances (active-LOW) |
+| DC Air Pump (3.7–6V) | Appliance 1 |
+| LED | Appliance 2 |
+| Dual-digit Seven-Segment Display (1 segment used) | Appliance 3 |
+| 5V USB Fan + USB Breakout Board | Appliance 4 |
+
+See [`hardware/BOM.md`](hardware/BOM.md) for full pricing and justifications.
 
 ---
 
-## System Architecture
+## ESP32 Pin Assignment
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      SENSING LAYER                           │
-│  ZMPT101B B25      ACS712 30A       DHT22                    │
-│  (Voltage RMS)     (Current RMS)    (Temp / Humidity)        │
-│       │                 │                 │                  │
-│       └────── ADS1115 ──┘                 │ (1-Wire GPIO 4)  │
-│              (I2C 0x48)                   │                  │
-└──────────────────────┬────────────────────┘                  │
-                       │ I2C                │ Digital           │
-┌──────────────────────▼────────────────────▼──────────────────┐
-│                  PROCESSING LAYER                             │
-│                   ESP32 Dev Board                             │
-│  • RMS calculation     • Energy accumulation                 │
-│  • Threshold detection • Wi-Fi + Blynk client                │
-└────────┬────────────┬────────────┬──────────────┬────────────┘
-         │            │            │              │
-    ┌────▼────┐  ┌────▼────┐  ┌───▼───┐    ┌────▼─────┐
-    │ 4-Ch    │  │16×2 LCD │  │ RGB   │    │  Blynk   │
-    │ Relay   │  │(I2C)    │  │  LED  │    │  Cloud   │
-    │ Module  │  │ 0x27    │  │ Strip │    │(Internet)│
-    └─────────┘  └─────────┘  └───────┘    └──────────┘
-    APPLICATION LAYER
-```
-
-### Blynk Virtual Pin Map
-
-| Virtual Pin | Data | Direction |
-|-------------|------|-----------|
-| V0 | Voltage (V) | ESP32 → Blynk |
-| V1 | Current (A) | ESP32 → Blynk |
-| V2 | Power (W) | ESP32 → Blynk |
-| V3 | Energy (kWh) | ESP32 → Blynk |
-| V4 | Temperature (°C) | ESP32 → Blynk |
-| V5 | Humidity (%) | ESP32 → Blynk |
-| V6 | Power Factor | ESP32 → Blynk |
-| V10–V13 | Relay 0–3 ON/OFF | Blynk → ESP32 |
+| GPIO | Function |
+|------|----------|
+| GPIO35 | B25 voltage sensor signal |
+| GPIO34 | ACS712 current sensor output |
+| GPIO32 | DHT22 data |
+| GPIO21 | OLED SDA |
+| GPIO22 | OLED SCL |
+| GPIO26 | Relay Channel 1 - Air pump |
+| GPIO27 | Relay Channel 2 - LED |
+| GPIO25 | Relay Channel 3 - Seven-segment |
+| GPIO33 | Relay Channel 4 - USB fan |
 
 ---
 
 ## Circuit Wiring
 
-### ZMPT101B B25 → ADS1115
+### B25 Voltage Sensor → ESP32
 ```
-ZMPT101B OUT+ → ADS1115 AIN0
-ZMPT101B OUT- → ADS1115 GND
-ZMPT101B VCC  → 3.3 V
-ZMPT101B GND  → GND
+B25 Signal Out → GPIO35
+B25 VCC        → 3.3V (or 5V, per module spec)
+B25 GND        → Common GND
 ```
-> **Safety note:** The ZMPT101B B25 module includes an internal isolation transformer. Never connect the mains input side directly to the ESP32 or any logic circuitry.
+The B25 acts as a voltage divider. The ESP32 reads the reduced analog
+signal and reconstructs the actual input voltage using the divider ratio
+(≈5.0, calibrate against a multimeter).
 
-### ACS712 30A → ADS1115
+### ACS712 30A Current Sensor → ESP32
 ```
-ACS712 OUT  → ADS1115 AIN1
-ACS712 VCC  → 5 V
-ACS712 GND  → GND
+ACS712 OUT → GPIO34
+ACS712 VCC → 5V
+ACS712 GND → Common GND
 ```
-
-### ADS1115 → ESP32 (I2C)
-```
-ADS1115 VDD  → 3.3 V
-ADS1115 GND  → GND
-ADS1115 SCL  → GPIO 22
-ADS1115 SDA  → GPIO 21
-ADS1115 ADDR → GND (address 0x48)
-```
+The positive supply passes **through** the ACS712 current terminals before
+reaching the relay COM terminals, so the current of the selected appliance
+is measured by this single sensor.
 
 ### DHT22 → ESP32
 ```
-DHT22 VCC    → 3.3 V
-DHT22 DATA   → GPIO 4 (10 kΩ pull-up to 3.3 V)
-DHT22 GND    → GND
+DHT22 VCC  → 3.3V
+DHT22 DATA → GPIO32 (10kΩ pull-up to 3.3V)
+DHT22 GND  → Common GND
+```
+
+### OLED (128×64, I2C) → ESP32
+```
+SDA → GPIO21
+SCL → GPIO22
+VCC → 3.3V
+GND → Common GND
 ```
 
 ### 4-Channel Relay Module → ESP32
 ```
-IN1 → GPIO 16  (Relay 0)
-IN2 → GPIO 17  (Relay 1)
-IN3 → GPIO 18  (Relay 2)
-IN4 → GPIO 19  (Relay 3)
-VCC → 5 V
-GND → GND
+IN1 → GPIO26  (Air pump)
+IN2 → GPIO27  (LED)
+IN3 → GPIO25  (Seven-segment)
+IN4 → GPIO33  (USB fan)
+VCC → 5V
+GND → Common GND
+```
+Relay module is **active-LOW**: LOW = relay ON, HIGH = relay OFF. Loads are
+wired through COM and NO contacts, so appliances stay off until their
+channel is activated.
+
+### Appliance Wiring
+
+**Air pump (Relay CH1):**
+```
+External 5V+ (after ACS712) → Relay CH1 COM
+Relay CH1 NO                → Air pump (+)
+Air pump (–)                → External supply GND
 ```
 
-### 16×2 LCD (I2C) → ESP32
+**LED (Relay CH2):**
 ```
-SDA → GPIO 21
-SCL → GPIO 22
-VCC → 5 V
-GND → GND
+External 5V+ (after ACS712) → Relay CH2 COM
+Relay CH2 NO → current-limiting resistor → LED (+)
+LED (–)      → External supply GND
 ```
 
-### RGB LED Strip → ESP32 (PWM)
+**Seven-segment, one segment (Relay CH3):**
 ```
-RED   → GPIO 25 (LEDC Ch0)
-GREEN → GPIO 26 (LEDC Ch1)
-BLUE  → GPIO 27 (LEDC Ch2)
-GND   → GND
+External 5V+ (after ACS712) → Relay CH3 COM
+Relay CH3 NO → 220-330Ω resistor → chosen segment pin
+Display pin 8 (common)          → External supply GND
 ```
+Only one segment is used; the display does not show complete numbers.
+
+**USB fan (Relay CH4):**
+```
+External 5V+ (after ACS712)      → Relay CH4 COM
+Relay CH4 NO                      → USB breakout VBUS / 5V pin
+USB breakout GND                  → External supply GND
+(USB D+ / D− pins are not connected)
+```
+
+---
+
+## Power Distribution
+
+- The **ESP32** is powered via laptop USB during testing.
+- The **appliances, relay module, and 5V sensors** are powered from an
+  **external regulated 5V DC supply**.
+- **All grounds are commoned**: ESP32, external supply, relay module,
+  ACS712, B25, DHT22, OLED, air pump, LED, seven-segment, USB breakout.
+- Main positive path:
+  ```
+  External 5V (+) → ACS712 IN → ACS712 OUT → Relay COM terminals (all 4 channels)
+  ```
+  This lets the single ACS712 measure whichever appliance is currently
+  active.
 
 ---
 
 ## Software Setup
 
-### Prerequisites
+### Required Libraries (Arduino IDE Library Manager)
 
-Install the following libraries via Arduino IDE **Library Manager**:
-
-| Library | Version | Purpose |
-|---------|---------|---------|
-| `Blynk` | ≥ 1.3.2 | IoT cloud platform |
-| `Adafruit ADS1X15` | ≥ 2.5.0 | ADS1115 ADC driver |
-| `DHT sensor library` | ≥ 1.4.4 | DHT22 driver |
-| `LiquidCrystal I2C` | ≥ 1.1.2 | 16×2 LCD driver |
-| `Adafruit Unified Sensor` | ≥ 1.1.9 | Adafruit dependency |
+| Library | Purpose |
+|---------|---------|
+| `Blynk` | IoT cloud platform |
+| `DHT sensor library` | DHT22 driver |
+| `Adafruit GFX Library` | Graphics primitives for OLED |
+| `Adafruit SSD1306` | 128×64 OLED driver |
 
 ### Configuration
 
-Edit `config.h` before flashing:
-
+Edit `config.h`:
 ```cpp
 #define WIFI_SSID   "your_network_name"
 #define WIFI_PASS   "your_wifi_password"
 ```
 
-In `smart_energy_monitor.ino`:
-
+Edit the top of `smart_energy_monitor.ino`:
 ```cpp
-#define BLYNK_TEMPLATE_ID   "TMPLxxxxxxxx"        // from Blynk console
-#define BLYNK_TEMPLATE_NAME "SmartEnergyMonitor"
-#define BLYNK_AUTH_TOKEN    "your_auth_token"      // from Blynk console
+#define BLYNK_TEMPLATE_ID   "TMPLxxxxxxxx"     // from Blynk console
+#define BLYNK_TEMPLATE_NAME "SmartApplianceMonitor"
+#define BLYNK_AUTH_TOKEN    "your_auth_token"   // from Blynk console
 ```
 
 ### Flash the ESP32
 
 1. Open `src/smart_energy_monitor/smart_energy_monitor.ino` in Arduino IDE.
-2. Select **Board:** `ESP32 Dev Module`, **Port:** your COM/tty port.
-3. Set **Upload Speed:** `921600`.
-4. Click **Upload (→)**.
+2. Board: `ESP32 Dev Module`. Select the correct COM/tty port.
+3. Upload speed: `921600`.
+4. Click **Upload**.
 
 ---
 
 ## Blynk Dashboard Configuration
 
-1. Log in to [Blynk Console](https://blynk.cloud) and create a new Template.
-2. Add the following widgets:
+Create a Blynk template with the following datastreams and widgets:
 
-| Widget | Virtual Pin | Label |
-|--------|-------------|-------|
-| Gauge | V0 | Voltage (V) |
-| Gauge | V1 | Current (A) |
-| Gauge | V2 | Power (W) |
-| SuperChart | V3 | Energy (kWh) |
-| Value Display | V4 | Temperature (°C) |
-| Value Display | V5 | Humidity (%) |
-| Button (Switch) | V10 | Relay 1 |
-| Button (Switch) | V11 | Relay 2 |
-| Button (Switch) | V12 | Relay 3 |
-| Button (Switch) | V13 | Relay 4 |
+| Virtual Pin | Datastream Type | Widget | Label |
+|-------------|-----------------|--------|-------|
+| V0 | Numeric | Gauge / Value display | Voltage (V) |
+| V1 | Numeric | Gauge / Value display | Current (A) |
+| V2 | Numeric | Gauge / Value display | Power (W) |
+| V3 | Numeric | Value display | Temperature (°C) |
+| V4 | Numeric | Value display | Humidity (%) |
+| V5 | Integer (0/1) | Switch | Air pump |
+| V6 | Integer (0/1) | Switch | LED |
+| V7 | Integer (0/1) | Switch | Seven-segment |
+| V8 | Integer (0/1) | Switch | USB fan |
 
-3. Create an **Event** named `high_power_alert` with push notification enabled.
-4. Set notification trigger: Power (V2) > 2000 W.
+Because the firmware writes back to V5–V8 on every publish cycle, the mobile
+switches automatically stay synchronized with the actual relay states -
+including when exclusive mode auto-switches another appliance off.
 
 ---
 
-## Calibration Guide — ZMPT101B B25
+## Exclusive Appliance-Control Mode
 
-The **B25 variant** of the ZMPT101B uses a 25:1 toroidal transformer ratio with a precision burden resistor. Due to component tolerances, a per-unit calibration is recommended:
+Only **one appliance** may be active at a time, because a single ACS712
+sensor is used. When a user turns on a new appliance:
 
-1. Connect the ZMPT101B B25 to a known stable AC source (e.g., 230 V wall outlet).
-2. Measure the true RMS voltage with a calibrated multimeter.
-3. Read the uncalibrated output from the serial monitor (`V_raw`).
-4. Compute: `ZMPT101B_CALIBRATION_FACTOR = V_true / (V_raw / current_factor)`
-5. Update `config.h` with the new calibration factor.
+1. The firmware checks if a different appliance is currently active.
+2. If so, that appliance's relay is switched off first.
+3. The newly requested appliance's relay is then switched on.
+4. Updated switch states are pushed back to Blynk so the app UI stays in
+   sync.
 
-> **Default:** `ZMPT101B_CALIBRATION_FACTOR = 0.7812f` — measured against a Fluke 117 multimeter at 230 V AC, 50 Hz.
+Example: if the air pump is ON and the user switches on the USB fan, the
+pump is turned off automatically before the fan is activated.
+
+---
+
+## Data Processing / Calibration
+
+### Voltage
+```
+Measured voltage = Sensor output voltage × Divider ratio × Calibration factor
+```
+Sensor output voltage is derived from the ESP32's 12-bit ADC reading and the
+3.3 V reference. The divider ratio defaults to ~5.0 and should be calibrated
+against a multimeter (`VOLTAGE_CAL_FACTOR` in `config.h`).
+
+### Current
+```
+Current = |ACS712 output voltage − zero-current voltage| / sensitivity
+```
+The zero-current voltage is measured automatically at startup while all
+appliances are off (`calibrateACS712Zero()` in `energy_calc.h`). Sensitivity
+for the 30A ACS712 variant is ≈0.066 V/A.
+
+### Power
+```
+Power = Voltage × Current
+```
+Result is displayed in watts.
 
 ---
 
@@ -238,72 +301,45 @@ smart-energy-monitor/
 │   └── smart_energy_monitor/
 │       ├── smart_energy_monitor.ino   ← Main sketch
 │       ├── config.h                   ← Pin definitions & constants
-│       ├── energy_calc.h              ← RMS voltage, current & energy functions
-│       ├── relay_ctrl.h               ← Relay control functions
-│       ├── display.h                  ← LCD update routines
-│       └── led_status.h               ← RGB LED status indicator
+│       ├── energy_calc.h              ← Voltage, current & power calculations
+│       ├── relay_ctrl.h               ← Exclusive-mode relay control
+│       └── display.h                  ← OLED display routine
 ├── docs/
+│   ├── GITHUB_WORKFLOW.md
 │   ├── block_diagram.png
-│   ├── flowchart.png
 │   ├── circuit_schematic.png
 │   └── blynk_dashboard_screenshot.png
 ├── hardware/
-│   └── BOM.md                         ← Bill of Materials
+│   └── BOM.md
 ├── README.md
 └── .gitignore
 ```
 
 ---
 
-## Commit History Convention
+## Limitations
 
-All commits follow the **Conventional Commits** specification:
-
-```
-feat:     New feature
-fix:      Bug fix
-docs:     Documentation changes only
-refactor: Code refactoring (no functional change)
-test:     Add or update tests
-chore:    Build process or tooling changes
-```
-
-Example commit messages used in this project:
-```
-feat: add ZMPT101B B25 RMS voltage measurement with calibration factor
-feat: implement ACS712 zero-corrected RMS current sensing
-feat: integrate ADS1115 I2C ADC driver for dual-channel sensing
-feat: add DHT22 temperature and humidity acquisition
-feat: configure 4-channel active-low relay with Blynk V-pin handlers
-feat: add 16x2 I2C LCD alternating screen display
-feat: add RGB LED strip PWM status indicator (green/yellow/red)
-feat: integrate Blynk IoT dashboard with virtual pin mapping
-feat: implement energy accumulation (kWh) with time-delta calculation
-feat: add power threshold alert with Blynk push notification
-fix: correct ZMPT101B DC offset removal for accurate RMS on B25 module
-fix: filter ACS712 noise floor below 20 mA
-refactor: split firmware into modular header files
-docs: add README with wiring guide and calibration instructions
-docs: add Blynk dashboard setup guide
-```
+- The ACS712 30A sensor has low sensitivity for very small loads (e.g. a
+  single LED or seven-segment segment may be hard to measure accurately).
+- Only one appliance's current can be measured at a time (single sensor).
+- The system depends on Wi-Fi and Blynk Cloud for remote operation.
+- Designed only for low-voltage DC appliances - not for AC mains.
+- Readings require calibration against a multimeter/current meter.
+- The seven-segment display uses only one segment; it does not show full
+  numbers.
+- Electrical noise from motors (pump, fan) may affect sensor stability.
+- If a load bypasses the ACS712, its current will not be measured.
 
 ---
 
 ## Team Members
 
-| # | Name | Student ID | Role |
-|---|------|------------|------|
-| 1 | Member 1 (TBD) | TBD | Hardware design, sensor wiring & validation |
-| 2 | Member 2 (TBD) | TBD | Firmware development, GitHub management |
-| 3 | Member 3 (TBD) | TBD | IoT platform integration, Blynk dashboard |
-| 4 | Member 4 (TBD) | TBD | Documentation, experimental validation & video |
+| # | Name | Student ID | Email | Major | Role Title | Contribution |
+|---|------|------------|-------|-------|------------|--------------|
+| 1 | Muhammad Azlan Shah Bin Azman | 1211112302 | 1211112302@student.mmu.edu.my | TE | **Hardware & Integration Lead** | B25 & ACS712 wiring and calibration; hardware-software integration |
+| 2 | Mohd Aiman Najwan Bin Mohd Asri | 1211112324 | 1211112324@student.mmu.edu.my | TE | **Firmware Lead / GitHub Manager** | Core firmware development; repository and branch management |
+| 3 | Luqman Bin Mohamad Ali | 1221305890 | 1221305890@student.mmu.edu.my | TE | **IoT Integration Lead** | Blynk dashboard and exclusive-mode switch synchronization |
+| 4 | Amirul Fareez Bin Mohammad Faizal | 1211112318 | 1211112318@student.mmu.edu.my | TE | **Project Coordinator / Documentation Lead** | Task tracking and scheduling; documentation, testing, and demonstration video |
 
-**Subject:** ACE6263 — Embedded IoT Systems  
-**Trimester:** March/April 2026  
-**Submission Date:** 26 June 2026
-
----
-
-## License
-
-This project is submitted as academic coursework for ACE6263 at the institution. All rights reserved by the respective authors.
+**Subject:** ACE6263 - Embedded IoT Systems
+**Trimester:** March/April 2026

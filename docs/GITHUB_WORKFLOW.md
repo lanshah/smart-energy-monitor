@@ -1,308 +1,218 @@
 # GitHub Setup & Commit Guide
-## ACE6263 Smart Energy Monitor — Step-by-Step
+## ACE6263 Smart Appliance Monitor - Step-by-Step
 
-This guide walks through the exact GitHub workflow your group should follow
-to satisfy the **"GitHub Activity — Regularity and quality of commits" (3 marks)**
-assessment criterion.
-
----
-
-## 1. Create the Repository (Member 2 — GitHub Manager)
-
-```bash
-# 1. Go to https://github.com and log in
-# 2. Click "New repository"
-#    Name:        smart-energy-monitor
-#    Description: ACE6263 Smart Energy Monitoring System — SDG 7
-#    Visibility:  Public (so lecturer can view progress)
-#    Init with:   README (uncheck — we'll push our own)
-#    .gitignore:  None (we have our own)
-# 3. Copy the remote URL e.g. https://github.com/YourOrg/smart-energy-monitor.git
-```
+This guide satisfies the **"GitHub Activity - Regularity and quality of
+commits" (3 marks)** assessment criterion.
 
 ---
 
-## 2. Initial Local Setup (All Members)
+## 1. Repository already created
+
+Repo: `https://github.com/lanshah/smart-energy-monitor.git`
+
+If not yet done, push the initial project (from your local unzipped folder):
 
 ```bash
-# Clone the repository
-git clone https://github.com/YourOrg/smart-energy-monitor.git
-cd smart-energy-monitor
-
-# Set your identity (each member on their own machine)
-git config user.name  "Your Full Name"
-git config user.email "yourname@student.edu"
+git init
+git add .
+git commit -m "chore: initialise repository with README and .gitignore"
+git branch -M main
+git remote add origin https://github.com/lanshah/smart-energy-monitor.git
+git push -u origin main
 ```
 
 ---
 
-## 3. Recommended Branch Strategy
+## 2. Branch Strategy
 
 ```
-main            ← stable, always-working code (protected)
-├── develop     ← integration branch
-│   ├── feat/voltage-sensor   ← Member 1
-│   ├── feat/firmware-core    ← Member 2
-│   ├── feat/blynk-iot        ← Member 3
-│   └── docs/report-and-bom   ← Member 4
+main
+├── develop
+│   ├── feat/voltage-current-sensing   ← Muhammad Azlan Shah Bin Azman (B25 + ACS712 + integration)
+│   ├── feat/firmware-core             ← Mohd Aiman Najwan Bin Mohd Asri (relay, OLED, main sketch)
+│   ├── feat/blynk-iot                 ← Luqman Bin Mohamad Ali (Blynk + exclusive mode)
+│   └── docs/report-and-bom            ← Amirul Fareez Bin Mohammad Faizal (Project Coordinator; README, BOM, docs)
 ```
 
 ```bash
-# Member 2 creates branches after initial commit
 git checkout -b develop
 git push -u origin develop
 
-git checkout -b feat/voltage-sensor  develop
-git push -u origin feat/voltage-sensor
-# ... repeat for other feature branches
-```
+git checkout -b feat/voltage-current-sensing develop
+git push -u origin feat/voltage-current-sensing
 
----
-
-## 4. Chronological Commit Sequence
-### (Spread across Weeks 4–13 to show regularity)
-
-Copy-paste these commands in order, each on the date indicated.
-
----
-
-### WEEK 4 — Repository Bootstrap (Member 2)
-
-```bash
-# --- Commit 1 ---
 git checkout develop
-cp /path/to/your/files/README.md .
-cp /path/to/your/files/.gitignore .
-mkdir -p src/smart_energy_monitor docs hardware
+git checkout -b feat/firmware-core develop
+git push -u origin feat/firmware-core
 
-git add README.md .gitignore
-git commit -m "chore: initialise repository with README and .gitignore"
-git push origin develop
+git checkout develop
+git checkout -b feat/blynk-iot develop
+git push -u origin feat/blynk-iot
 
-# --- Commit 2 ---
-cp /path/to/your/files/hardware/BOM.md hardware/
-git add hardware/BOM.md
-git commit -m "docs: add initial Bill of Materials with component justifications"
-git push origin develop
+git checkout develop
+git checkout -b docs/report-and-bom develop
+git push -u origin docs/report-and-bom
 ```
 
 ---
 
-### WEEK 5 — Hardware Foundation (Member 1 on feat/voltage-sensor)
+## 3. Commit Sequence by Member
+
+### Muhammad Azlan Shah Bin Azman - Voltage & Current Sensing, Hardware-Software Integration
 
 ```bash
-git checkout feat/voltage-sensor
+git checkout feat/voltage-current-sensing
 
-# Add config.h skeleton
 git add src/smart_energy_monitor/config.h
-git commit -m "chore: add config.h with pin definitions and system constants"
-git push origin feat/voltage-sensor
+git commit -m "chore: add config.h with pin definitions for B25, ACS712, DHT22, OLED and relays"
+git push origin feat/voltage-current-sensing
 
-# Add ZMPT101B B25 voltage sensing code
 git add src/smart_energy_monitor/energy_calc.h
-git commit -m "feat: add ZMPT101B B25 RMS voltage measurement with B25 calibration factor
+git commit -m "feat: add B25 voltage measurement using divider ratio and calibration factor"
+git push origin feat/voltage-current-sensing
 
-The B25 module uses a 25:1 transformer ratio. Calibration factor 0.7812
-was determined empirically against a Fluke 117 multimeter at 230V AC, 50Hz.
-500 samples are collected per measurement for stable RMS computation."
-git push origin feat/voltage-sensor
+git commit -m "feat: add ACS712 zero-current calibration performed at startup
+
+Averages 200 ADC samples while all appliances are off to obtain a stable
+zero-current reference voltage, compensating for board and supply drift."
+git push origin feat/voltage-current-sensing
+
+git commit -m "feat: add ACS712 current measurement using zero-referenced difference
+
+Current = |ACS712 output - zero-current voltage| / 0.066 V/A sensitivity."
+git push origin feat/voltage-current-sensing
+
+git commit -m "test: verify hardware-software integration across all sensor and relay modules
+
+Bench-tested the assembled circuit end-to-end against the firmware: confirmed
+B25 and ACS712 ADC readings on GPIO35/GPIO34 match the config.h pin map,
+verified DHT22 readings on GPIO32, and checked that relay activation on
+GPIO26/27/25/33 correctly followed exclusive-mode switching in practice
+before handing the integrated build off to the team for firmware testing."
+git push origin feat/voltage-current-sensing
+
+git commit -m "fix: resolve wiring mismatch found during integration testing
+
+Corrected a swapped connection between the ACS712 output and ADS/ADC input
+identified while integrating hardware with the firmware build; re-verified
+current readings against the bench multimeter after the fix."
+git push origin feat/voltage-current-sensing
 ```
 
----
-
-### WEEK 6 — Core Firmware (Member 2 on feat/firmware-core)
+### Mohd Aiman Najwan Bin Mohd Asri - Core Firmware
 
 ```bash
 git checkout feat/firmware-core
 
 git add src/smart_energy_monitor/relay_ctrl.h
-git commit -m "feat: add 4-channel active-low relay control with init and state query"
+git commit -m "feat: add 4-channel active-low relay control"
+git push origin feat/firmware-core
+
+git commit -m "feat: implement exclusive appliance-control mode
+
+Only one relay may be active at a time since a single ACS712 sensor is
+used. Activating a new appliance automatically switches off the previous
+one before switching on the requested one."
 git push origin feat/firmware-core
 
 git add src/smart_energy_monitor/display.h
-git commit -m "feat: add 16x2 I2C LCD alternating screen display (Screen A: V/I/P/E, Screen B: T/H)"
+git commit -m "feat: add 128x64 I2C OLED display showing active appliance, V/I/P, T/H and Blynk status"
 git push origin feat/firmware-core
-
-git add src/smart_energy_monitor/led_status.h
-git commit -m "feat: add RGB LED strip PWM status indicator
-
-Colour coding:
-  Green  = normal (load <= 70% threshold)
-  Yellow = moderate (70-100% threshold)
-  Red    = alert (load > threshold)
-  Blue   = offline/connecting"
-git push origin feat/firmware-core
-```
-
----
-
-### WEEK 7 — ACS712 Current Sensing (Member 1)
-
-```bash
-git checkout feat/voltage-sensor
-
-# Update energy_calc.h with current sensing
-git add src/smart_energy_monitor/energy_calc.h
-git commit -m "feat: add ACS712 30A zero-corrected RMS current sensing
-
-Uses auto-computed DC offset (mean of 500 samples) instead of fixed
-midpoint to account for supply voltage variations. Noise floor filter
-ignores readings below 20mA."
-git push origin feat/voltage-sensor
-```
-
----
-
-### WEEK 8 — Interim Progress + Main Sketch Draft (Member 2)
-
-```bash
-git checkout feat/firmware-core
 
 git add src/smart_energy_monitor/smart_energy_monitor.ino
-git commit -m "feat: add main ESP32 sketch with sensor loop and serial debug output
-
-- Initialises ADS1115, DHT22, LCD, relays and RGB LED
-- BlynkTimer polls sensors every 2000ms
-- Publishes V, I, P, E, T, H to Blynk virtual pins V0-V6
-- Serial debug output for all measured values"
+git commit -m "feat: add main ESP32 sketch - sensor loop, relay init, OLED init, Wi-Fi/Blynk connect"
 git push origin feat/firmware-core
-
-# Merge firmware-core into develop
-git checkout develop
-git merge --no-ff feat/firmware-core -m "merge: integrate core firmware (relay, LCD, LED, main sketch)"
-git push origin develop
 ```
 
----
-
-### WEEK 9 — Blynk IoT Integration (Member 3 on feat/blynk-iot)
+### Luqman Bin Mohamad Ali - Blynk IoT Integration
 
 ```bash
 git checkout feat/blynk-iot
 
 git add src/smart_energy_monitor/smart_energy_monitor.ino
-git commit -m "feat: configure Blynk virtual pin handlers for relay ON/OFF control (V10-V13)"
+git commit -m "feat: add Blynk virtual pin handlers V5-V8 for exclusive appliance switches"
 git push origin feat/blynk-iot
 
-git commit -m "feat: add power threshold alert with Blynk logEvent push notification
+git commit -m "feat: publish sensor readings to Blynk V0-V4 every 2000ms"
+git push origin feat/blynk-iot
 
-Threshold configured at 2000W (POWER_ALERT_THRESHOLD_W in config.h).
-Notification sent via Blynk event 'high_power_alert' with real-time
-power reading included in the message body."
+git commit -m "feat: sync relay states back to Blynk switches after exclusive-mode auto-off
+
+Ensures mobile app switches always reflect the true relay state, even
+when the firmware automatically turns off a previously active appliance."
 git push origin feat/blynk-iot
 ```
 
----
-
-### WEEK 10 — Energy Accumulation & Testing (Member 2)
+### Amirul Fareez Bin Mohammad Faizal - Project Coordinator; Documentation
 
 ```bash
-git checkout feat/firmware-core
+git checkout docs/report-and-bom
 
-git add src/smart_energy_monitor/energy_calc.h
-git commit -m "feat: implement incremental kWh energy accumulation with time-delta
+git add hardware/BOM.md
+git commit -m "docs: add Bill of Materials for B25, ACS712, DHT22, OLED, relay and 4 appliances"
+git push origin docs/report-and-bom
 
-Energy is accumulated using delta_hours between each 2s sample period.
-Running total persists in RAM; future work: NVS/EEPROM persistence."
-git push origin feat/firmware-core
-```
+git add README.md
+git commit -m "docs: add README with wiring guide, pin table, Blynk setup and calibration steps"
+git push origin docs/report-and-bom
 
----
-
-### WEEK 11 — Integration & Bug Fixes
-
-```bash
-# Merge all feature branches into develop
-git checkout develop
-git merge --no-ff feat/voltage-sensor -m "merge: integrate ZMPT101B B25 voltage and ACS712 current sensing"
-git merge --no-ff feat/blynk-iot      -m "merge: integrate Blynk IoT dashboard and alert system"
-git push origin develop
-
-# Bug fix example
-git commit -m "fix: correct ZMPT101B DC offset removal for accurate zero-crossing on B25 module
-
-The B25 module's output midpoint drifts with supply voltage. Replaced
-fixed 2500mV midpoint with dynamically computed mean to prevent RMS
-inflation from DC bias."
-git push origin develop
-```
-
----
-
-### WEEK 12 — Optimisation & Documentation (All Members)
-
-```bash
-# Member 4
 git add docs/
-git commit -m "docs: add circuit schematic, block diagram and Blynk dashboard screenshots"
-git push origin develop
+git commit -m "docs: add block diagram, circuit schematic and Blynk dashboard screenshots"
+git push origin docs/report-and-bom
 
-# Member 2
-git commit -m "refactor: split firmware into modular header files for maintainability
+git commit -m "chore: coordinate weekly progress checks across all four branches
 
-Separated concerns:
-  config.h      - pin defs & constants
-  energy_calc.h - voltage, current & energy maths
-  relay_ctrl.h  - relay GPIO abstraction
-  display.h     - LCD rendering
-  led_status.h  - RGB LED PWM control"
-git push origin develop
+As project coordinator, tracked outstanding tasks on each feature branch,
+scheduled integration checkpoints ahead of the interim and final submission
+deadlines, and confirmed every member's commits were pushed under their own
+GitHub account before each merge into develop."
+git push origin docs/report-and-bom
+
+git commit -m "docs: finalise experimental results section after coordinating validation session
+
+Compiled voltage, current and power readings recorded during the joint
+testing session, cross-checked against the bench multimeter, and merged
+them into the final report and README."
+git push origin docs/report-and-bom
 ```
 
 ---
 
-### WEEK 13 — Final Merge to Main (Member 2)
+## 4. Merge Everything into develop, then main
 
 ```bash
+git checkout develop
+git merge --no-ff feat/voltage-current-sensing -m "merge: integrate B25 voltage and ACS712 current sensing"
+git merge --no-ff feat/firmware-core -m "merge: integrate relay control, OLED and main sketch"
+git merge --no-ff feat/blynk-iot -m "merge: integrate Blynk IoT dashboard and exclusive-mode sync"
+git merge --no-ff docs/report-and-bom -m "merge: integrate documentation and BOM"
+git push origin develop
+
 git checkout main
-git merge --no-ff develop -m "release: v1.0.0 — Smart Energy Monitor final submission
+git merge --no-ff develop -m "release: v2.0.0 - Smart Appliance Monitor final submission
 
 Features:
-  - ZMPT101B B25 AC voltage RMS (±1.5% accuracy)
-  - ACS712 30A AC current RMS (±2% accuracy)
-  - DHT22 temperature & humidity monitoring
-  - 4-channel relay remote switching via Blynk
-  - 16x2 I2C LCD local display
-  - RGB LED visual status indicator
-  - Blynk cloud dashboard with real-time gauges
-  - kWh energy accumulation
-  - Power threshold push notifications
-  - Relay switching latency avg 320ms over Wi-Fi
+  - B25 DC voltage measurement with divider-ratio calibration
+  - ACS712 30A current measurement with startup zero-calibration
+  - DHT22 temperature and humidity monitoring
+  - 128x64 I2C OLED local display
+  - 4-channel relay control in exclusive appliance mode
+  - Blynk dashboard: V0-V4 sensor data, V5-V8 appliance switches
+  - Automatic switch-state sync after exclusive-mode auto-off"
 
-Tested loads: 100W incandescent bulb, 500W hair dryer"
-
-git tag -a v1.0.0 -m "ACE6263 Final Submission — Trimester March/April 2026"
+git tag -a v2.0.0 -m "ACE6263 Final Submission - Trimester March/April 2026"
 git push origin main --tags
 ```
 
 ---
 
-## 5. How the Lecturer Sees Your Contributions
-
-Each member must make **at least 3–5 meaningful commits** on their branch.
-The grader will check `git log --all --oneline --graph` or GitHub's
-contribution graph to verify:
-
-- ✅ Commits span from Week 4 to Week 13 (regularity)
-- ✅ Commit messages are descriptive (quality)
-- ✅ Each member has commits under their own name/email
-- ✅ Feature branches and merges show structured teamwork
-- ✅ `main` always has working code (no broken commits to main)
-
----
-
-## 6. Useful Git Commands
+## 5. Verifying Contribution Quality
 
 ```bash
-# View all commits with author info
 git log --oneline --all --graph --decorate
-
-# See who contributed what
 git shortlog -sn
-
-# Check your remote
-git remote -v
-
-# Undo last commit (keep changes)
-git reset --soft HEAD~1
 ```
+
+Each member should have **3–5+ commits** under their own GitHub account,
+spread across the project weeks, with descriptive messages - this is what
+the lecturer checks for the 3-mark GitHub activity criterion.

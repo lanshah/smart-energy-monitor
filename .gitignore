@@ -25,15 +25,9 @@ Desktop.ini
 .vscode/
 *.code-workspace
 
-# Credentials — NEVER commit these
-# config.h is committed but with placeholder values only.
-# Use config_local.h (gitignored) for real credentials.
+# Credentials - NEVER commit real values
 config_local.h
 secrets.h
 
 # Log files
 *.log
-
-# Compiled Python files
-__pycache__/
-*.pyc
